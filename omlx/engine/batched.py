@@ -494,6 +494,26 @@ class BatchedEngine(BaseEngine):
             except Exception:
                 logger.debug("Qwen FA-256 steel patch not applied", exc_info=True)
 
+        # Sliding-window layers: prefill chunks longer than the window attend
+        # only to the keys their band reaches. Only plain band masks route;
+        # every other mask takes the previous SDPA unchanged.
+        if (
+            getattr(
+                self._model_settings, "sliding_window_prefill_enabled", True
+            )
+            is not False
+        ):
+            try:
+                from ..patches.sliding_window_prefill_attention import (
+                    apply_sliding_window_prefill_attention_patch,
+                )
+
+                apply_sliding_window_prefill_attention_patch()
+            except Exception:
+                logger.debug(
+                    "Sliding-window prefill patch not applied", exc_info=True
+                )
+
         # Qwen3.5/3.6 q4 prefill linears -> native qmm tile tuned for long
         # batches. Strictly gated in the patch; decode and unsupported linears
         # fall through.
