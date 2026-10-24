@@ -71,11 +71,13 @@ from __future__ import annotations
 
 import logging
 import threading
+from contextlib import contextmanager
 
 logger = logging.getLogger(__name__)
 
 _KERNEL_CACHE: dict = {}
 _ROUTE_ARMED = threading.local()
+BATCHED_DECODE_MIN_ROWS = 6
 
 _MSG_NSG = 8  # simdgroups per threadgroup for the msg (lm_head) kernel
 
@@ -113,6 +115,30 @@ def _is_armed() -> bool:
 def is_row_exact_armed() -> bool:
     """True inside a verify forward whose rows must equal serial decode rows."""
     return getattr(_ROUTE_ARMED, "row_exact", False)
+
+
+@contextmanager
+def batched_decode_qmm(rows: int):
+    """Arm skinny-M routing for batched decode and restore the prior state."""
+    if rows < BATCHED_DECODE_MIN_ROWS or is_row_exact_armed():
+        yield
+        return
+
+    try:
+        applied = apply_verify_qmm_patch()
+    except Exception:
+        applied = False
+    if not applied:
+        yield
+        return
+
+    previous = _ROUTE_ARMED.__dict__.copy()
+    try:
+        set_verify_qmm_armed(True)
+        yield
+    finally:
+        _ROUTE_ARMED.__dict__.clear()
+        _ROUTE_ARMED.__dict__.update(previous)
 
 
 # ---------------------------------------------------------------------------

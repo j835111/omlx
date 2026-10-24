@@ -65,6 +65,7 @@ from .exceptions import (
 from .patches.mlx_lm_mtp import prompt_priming as _mtp_priming
 from .patches.mlx_lm_mtp.batch_generator import _drafter_for as _block_drafter_for
 from .patches.mlx_lm_mtp.batch_generator import interrupt_batch_timing
+from .patches.qwen35_verify_qmm import batched_decode_qmm
 from .patches.vlm_batch_kv_capacity import apply_batch_kv_capacity_patch
 from .prefill.packed import (
     PackedRow,
@@ -891,7 +892,8 @@ def _patched_generation_batch_step(self):
     # is there to guarantee.
     _omlx_advance_grammar_rows(self)
 
-    return _original_generation_batch_step(self)
+    with batched_decode_qmm(len(self.uids)):
+        return _original_generation_batch_step(self)
 
 
 GenerationBatch._omlx_realign_rows = _omlx_realign_generation_batch_rows
