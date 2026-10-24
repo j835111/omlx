@@ -438,6 +438,23 @@ class BatchedEngine(BaseEngine):
             except Exception:
                 logger.debug("MoE gate+up fusion not applied", exc_info=True)
 
+        # Combine sorted expert outputs directly during long MoE prefill.
+        if (
+            getattr(self._model_settings, "moe_expert_combine_enabled", True)
+            is not False
+            and not moe_offload_wrapped
+        ):
+            try:
+                from ..patches.moe_expert_combine import apply_moe_expert_combine
+
+                await loop.run_in_executor(
+                    get_mlx_executor(),
+                    apply_moe_expert_combine,
+                    self._model,
+                )
+            except Exception:
+                logger.debug("MoE expert combine not applied", exc_info=True)
+
         # Qwen MoE decode router: fuse the top-k select + renormalize chain
         # into one launch (the composed argpartition chain is ~2 ms/token on
         # the 256-expert 35B-A3B).

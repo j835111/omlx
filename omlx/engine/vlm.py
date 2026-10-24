@@ -2355,6 +2355,23 @@ class VLMBatchedEngine(BaseEngine):
             except Exception:
                 logger.debug("MoE gate+up fusion not applied", exc_info=True)
 
+        # Combine sorted expert outputs directly during long MoE prefill.
+        if (
+            getattr(self._model_settings, "moe_expert_combine_enabled", True)
+            is not False
+            and not getattr(self, "_moe_offload_wrapped", 0)
+        ):
+            try:
+                from ..patches.moe_expert_combine import apply_moe_expert_combine
+
+                await loop.run_in_executor(
+                    get_mlx_executor(),
+                    apply_moe_expert_combine,
+                    self._vlm_model,
+                )
+            except Exception:
+                logger.debug("MoE expert combine not applied", exc_info=True)
+
         # Qwen ANE prefill compiles its slices from the stock QuantizedLinear
         # layout, so build them before the packed projections replace it. The
         # class hooks are installed later, outside the other Qwen class patches.
