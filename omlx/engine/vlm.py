@@ -2745,6 +2745,23 @@ class VLMBatchedEngine(BaseEngine):
             except Exception:
                 logger.debug("Qwen q4 MLP prefill patch not applied", exc_info=True)
 
+        # Structural q4 routing runs after Qwen's specialized linear patches.
+        if getattr(
+            self._model_settings, "quantized_linear_prefill_enabled", True
+        ) is not False and not getattr(self, "_moe_offload_wrapped", 0):
+            try:
+                from ..patches.quantized_linear_prefill import (
+                    apply_quantized_linear_prefill,
+                )
+
+                await loop.run_in_executor(
+                    get_mlx_executor(),
+                    apply_quantized_linear_prefill,
+                    self._vlm_model,
+                )
+            except Exception:
+                logger.debug("Quantized linear prefill not applied", exc_info=True)
+
         # Qwen MoE decode router: fuse the top-k select + renormalize chain
         # into one launch for short rows (decode + MTP verify widths).
         try:
